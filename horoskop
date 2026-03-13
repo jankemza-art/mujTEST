@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Honza Kemza vám řekne, co vás čeká</title>
+  <meta name="description" content="MVP: Horoskop na další měsíc podle data narození (DD.MM.RRRR). Lokální běh, bez build nástrojů." />
+
+  <!-- Lucide icons (CDN) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* =========================================================
+       KB vibe (barvy přes CSS variables)
+       ---------------------------------------------------------
+       TODO: sem doplňte oficiální KB barvy (HEX) dle brand manuálu
+       ========================================================= */
+    :root{
+      --kb-primary: #0b6b3a;     /* KB-like green */
+      --kb-primary-2: #0a5b32;
+      --kb-accent: #e41f2d;      /* KB-like red */
+      --kb-bg: #f6f8f7;
+      --kb-surface: #ffffff;
+      --kb-text: #0f172a;
+      --kb-muted: #475569;
+      --kb-border: #e5e7eb;
+      --kb-shadow: 0 12px 34px rgba(2, 6, 23, 0.10);
+      --kb-radius: 18px;
+      --kb-radius-2: 22px;
+      --kb-focus: rgba(11, 107, 58, 0.22);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color: var(--kb-text);
+      background:
+        radial-gradient(1200px 700px at 15% -10%, rgba(11,107,58,0.14), transparent 60%),
+        radial-gradient(900px 600px at 95% 10%, rgba(228,31,45,0.12), transparent 55%),
+        var(--kb-bg);
+    }
+
+    .container{
+      width: min(980px, 92vw);
+      margin: 28px auto 52px;
+    }
+
+    .hero{
+      border: 1px solid var(--kb-border);
+      background: rgba(255,255,255,0.75);
+      backdrop-filter: blur(10px);
+      border-radius: var(--kb-radius-2);
+      box-shadow: var(--kb-shadow);
+      padding: 22px 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before{
+      content:"";
+      position:absolute;
+      inset: -120px -180px auto auto;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(11,107,58,0.22), transparent 60%);
+      filter: blur(1px);
+      pointer-events:none;
+    }
+    .hero::after{
+      content:"";
+      position:absolute;
+      inset: auto auto -160px -160px;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(228,31,45,0.16), transparent 60%);
+      pointer-events:none;
+    }
+
+    .topRow{
+      display:flex;
+      gap: 14px;
+      align-items:flex-start;
+      justify-content:space-between;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand{
+      display:flex;
+      gap: 12px;
+      align-items:center;
+    }
+    .logo{
+      width: 44px; height: 44px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--kb-primary), var(--kb-primary-2));
+      box-shadow: 0 12px 30px rgba(2, 6, 23, 0.16);
+      display:grid; place-items:center;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    h1{
+      margin: 0;
+      font-size: clamp(22px, 3.1vw, 34px);
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+    .sub{
+      margin: 8px 0 0;
+      color: var(--kb-muted);
+      font-size: 14px;
+      max-width: 60ch;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--kb-border);
+      background: rgba(255,255,255,0.65);
+      border-radius: 999px;
+      color: var(--kb-muted);
+      font-size: 13px;
+      user-select:none;
+    }
+
+    .card{
+      margin-top: 16px;
+      background: var(--kb-surface);
+      border: 1px solid var(--kb-border);
+      border-radius: var(--kb-radius-2);
+      box-shadow: var(--kb-shadow);
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+    }
+
+    .cardHead{
+      padding: 16px 16px 0;
+    }
+    .cardHead h2{
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+    .cardHead p{
+      margin: 6px 0 0;
+      color: var(--kb-muted);
+      font-size: 13px;
+    }
+
+    .cardBody{
+      padding: 16px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    @media (max-width: 740px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap: 6px;
+    }
+    label{
+      font-size: 12px;
+      color: var(--kb-muted);
+      font-weight: 700;
+    }
+    .input{
+      border: 1px solid var(--kb-border);
+      border-radius: 14px;
+      padding: 12px 12px;
+      font-size: 16px;
+      outline:none;
+      background: white;
+      transition: box-shadow .15s ease, border-color .15s ease;
+      width: 100%;
+    }
+    .input:focus{
+      border-color: rgba(11,107,58,0.45);
+      box-shadow: 0 0 0 4px var(--kb-focus);
+    }
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap: 9px;
+      padding: 13px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--kb-border);
+      background: white;
+      color: var(--kb-text);
+      font-weight: 800;
+      cursor:pointer;
+      transition: transform 0.05s ease, filter 0.15s ease, background 0.15s ease;
+      user-select:none;
+      width: 100%;
+      font-size: 16px;
+    }
+    .btn:hover{ background: rgba(11,107,58,0.04); border-color: rgba(11,107,58,0.28); }
+    .btn:active{ transform: translateY(1px); }
+    .btn:focus{ outline:none; box-shadow: 0 0 0 4px var(--kb-focus); }
+
+    .btn-primary{
+      background: linear-gradient(135deg, var(--kb-primary), var(--kb-primary-2));
+      border-color: transparent;
+      color: white;
+    }
+    .btn-primary:hover{ filter: brightness(1.03); }
+
+    .hint{
+      font-size: 12px;
+      color: var(--kb-muted);
+      margin-top: 8px;
+    }
+
+    .error{
+      display:none;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(228,31,45,0.25);
+      background: rgba(228,31,45,0.06);
+      color: #b3121c;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .result{
+      display:none;
+      margin-top: 14px;
+      border-top: 1px solid var(--kb-border);
+      padding-top: 14px;
+    }
+
+    .resultHeader{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: space-between;
+    }
+
+    .signBlock{
+      display:flex;
+      gap: 12px;
+      align-items:center;
+      min-width: 0;
+    }
+
+    .signImgWrap{
+      width: 62px;
+      height: 62px;
+      border-radius: 18px;
+      border: 1px solid rgba(11,107,58,0.18);
+      background:
+        radial-gradient(200px 120px at 30% 20%, rgba(11,107,58,0.12), transparent 55%),
+        rgba(11,107,58,0.04);
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+      flex-shrink: 0;
+    }
+
+    .signImgWrap img{
+      width: 42px;
+      height: 42px;
+      display:block;
+      object-fit: contain;
+      filter: drop-shadow(0 6px 10px rgba(2,6,23,0.12));
+    }
+
+    .signTitle{
+      margin:0;
+      font-size: 18px;
+      letter-spacing:-0.02em;
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      max-width: 65vw;
+    }
+
+    .monthBadge{
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--kb-border);
+      background: rgba(255,255,255,0.7);
+      color: var(--kb-muted);
+      font-size: 13px;
+      user-select:none;
+    }
+
+    .horoscope{
+      margin-top: 12px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 740px){
+      .horoscope{ grid-template-columns: 1fr; }
+    }
+
+    .panel{
+      border: 1px solid var(--kb-border);
+      border-radius: var(--kb-radius);
+      background: linear-gradient(180deg, rgba(255,255,255,1), rgba(246,248,247,0.65));
+      padding: 12px;
+    }
+    .panel h3{
+      margin: 0 0 6px;
+      font-size: 13px;
+      letter-spacing: -0.01em;
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      color: var(--kb-primary);
+    }
+    .panel p{
+      margin:0;
+      color: var(--kb-text);
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+
+    .footerNote{
+      margin-top: 12px;
+      color: var(--kb-muted);
+      font-size: 12px;
+    }
+
+    .smallLinkRow{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .linkBtn{
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 9px 11px;
+      border-radius: 999px;
+      border: 1px solid var(--kb-border);
+      background: rgba(255,255,255,0.65);
+      color: var(--kb-muted);
+      font-size: 13px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .linkBtn:hover{ border-color: rgba(11,107,58,0.28); background: rgba(11,107,58,0.04); }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <section class="hero">
+      <div class="topRow">
+        <div class="brand">
+          <div class="logo" aria-hidden="true"><i data-lucide="sparkles"></i></div>
+          <div>
+            <h1>Honza Kemza vám řekne, co vás čeká</h1>
+            <p class="sub">Zadejte datum narození a získáte znamení + horoskop na <strong>další měsíc</strong>. Vše běží lokálně v prohlížeči.</p>
+          </div>
+        </div>
+
+        <div class="pill" title="MVP ukládá poslední zadané datum do localStorage.">
+          <i data-lucide="shield"></i>
+          <span>Bez účtu • localStorage</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHead">
+          <h2>Zadej datum narození</h2>
+          <p>Formát: <strong>DD.MM.RRRR</strong> (např. 07.11.1992). Pole je povinné.</p>
+        </div>
+
+        <div class="cardBody">
+          <div class="grid">
+            <div class="field">
+              <label for="birthdate">Zadej datum narození</label>
+              <input
+                class="input"
+                id="birthdate"
+                placeholder="DD.MM.RRRR"
+                inputmode="numeric"
+                autocomplete="bday"
+                aria-required="true"
+                required
+              />
+              <div class="hint">Tip: Můžete psát i s tečkami — validace pohlídá správnost (např. 31.02.2020 neprojde).</div>
+            </div>
+
+            <div class="field" style="align-self:end;">
+              <button class="btn btn-primary" id="goBtn" type="button">
+                <i data-lucide="wand-2"></i>
+                Řekni mi, co mne čeká
+              </button>
+              <div class="smallLinkRow">
+                <button class="linkBtn" id="clearBtn" type="button" title="Vymazat uložené datum z tohoto prohlížeče">
+                  <i data-lucide="trash-2"></i>
+                  Vymazat uložené datum
+                </button>
+                <button class="linkBtn" id="fillTodayBtn" type="button" title="Rychlá ukázka: vyplní datum 01.01.2000">
+                  <i data-lucide="zap"></i>
+                  Ukázka
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="error" id="errorBox"></div>
+
+          <div class="result" id="resultBox" aria-live="polite">
+            <div class="resultHeader">
+              <div class="signBlock">
+                <div class="signImgWrap" aria-hidden="true">
+                  <img id="signImg" alt="" />
+                </div>
+                <div style="min-width:0">
+                  <p class="signTitle" id="signTitle">—</p>
+                  <div class="hint" id="signRange">—</div>
+                </div>
+              </div>
+
+              <div class="monthBadge" id="monthBadge">
+                <i data-lucide="calendar"></i>
+                <span>Horoskop pro —</span>
+              </div>
+            </div>
+
+            <div class="horoscope">
+              <div class="panel">
+                <h3><i data-lucide="heart"></i> Láska & vztahy</h3>
+                <p id="loveText"></p>
+              </div>
+              <div class="panel">
+                <h3><i data-lucide="briefcase"></i> Práce & peníze</h3>
+                <p id="workText"></p>
+              </div>
+              <div class="panel">
+                <h3><i data-lucide="activity"></i> Energie & zdraví</h3>
+                <p id="healthText"></p>
+              </div>
+              <div class="panel">
+                <h3><i data-lucide="lightbulb"></i> Tip měsíce</h3>
+                <p id="tipText"></p>
+              </div>
+            </div>
+
+            <div class="footerNote">
+              <strong>Poznámka (MVP):</strong> Text horoskopu je generovaný lokálně (bez API). Později sem můžete snadno doplnit backend / Firebase vrstvu. <!-- TODO: Firebase integrace -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    /*************************************************************
+     * Data layer (localStorage)
+     * -----------------------------------------------------------
+     * TODO (Firebase integrace):
+     * - zachovejte stejné rozhraní (get/set/clear)
+     * - nahraďte LocalStore za FirebaseStore a UI ponechte
+     *************************************************************/
+    const Store = (() => {
+      const KEY = "kb_honza_kemza_birthdate_v1";
+      function get() { return localStorage.getItem(KEY) || ""; }
+      function set(v) { localStorage.setItem(KEY, v || ""); }
+      function clear(){ localStorage.removeItem(KEY); }
+      return { get, set, clear };
+    })();
+
+    /*************************************************************
+     * Zodiac logic (tropical / western)
+     *************************************************************/
+    const Zodiac = (() => {
+      // Wikimedia Commons file sources (SVG) — hotlink via Special:FilePath
+      const SIGNS = [
+        { key:"aries",       name:"Beran",      from:[21,3],  to:[19,4],  file:"Aries.svg" },
+        { key:"taurus",      name:"Býk",        from:[20,4],  to:[20,5],  file:"Taurus.svg" },
+        { key:"gemini",      name:"Blíženci",   from:[21,5],  to:[20,6],  file:"Gemini.svg" },
+        { key:"cancer",      name:"Rak",        from:[21,6],  to:[22,7],  file:"Cancer.svg" },
+        { key:"leo",         name:"Lev",        from:[23,7],  to:[22,8],  file:"Leo.svg" },
+        { key:"virgo",       name:"Panna",      from:[23,8],  to:[22,9],  file:"Virgo.svg" },
+        { key:"libra",       name:"Váhy",       from:[23,9],  to:[22,10], file:"Libra.svg" },
+        { key:"scorpio",     name:"Štír",       from:[23,10], to:[21,11], file:"Scorpio.svg" },
+        { key:"sagittarius", name:"Střelec",    from:[22,11], to:[21,12], file:"Sagittarius.svg" },
+        { key:"capricorn",   name:"Kozoroh",    from:[22,12], to:[19,1],  file:"Capricorn.svg" },
+        { key:"aquarius",    name:"Vodnář",     from:[20,1],  to:[18,2],  file:"Aquarius.svg" },
+        { key:"pisces",      name:"Ryby",       from:[19,2],  to:[20,3],  file:"Pisces.svg" }
+      ];
+
+      function imageUrl(file){
+        return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}`;
+      }
+
+      function formatRange(sign){
+        const [fd,fm] = sign.from;
+        const [td,tm] = sign.to;
+        const f = `${String(fd).padStart(2,"0")}.${String(fm).padStart(2,"0")}.`;
+        const t = `${String(td).padStart(2,"0")}.${String(tm).padStart(2,"0")}.`;
+        return `${f}–${t}`;
+      }
+
+      function getSign(day, month){
+        for(const s of SIGNS){
+          const [fd,fm] = s.from;
+          const [td,tm] = s.to;
+
+          if(fm < tm || (fm === tm && fd <= td)){
+            const afterStart = (month > fm) || (month === fm && day >= fd);
+            const beforeEnd  = (month < tm) || (month === tm && day <= td);
+            if(afterStart && beforeEnd) return s;
+          } else {
+            const afterStart = (month > fm) || (month === fm && day >= fd);
+            const beforeEnd  = (month < tm) || (month === tm && day <= td);
+            if(afterStart || beforeEnd) return s;
+          }
+        }
+        return null;
+      }
+
+      return { getSign, imageUrl, formatRange };
+    })();
+
+    /*************************************************************
+     * Horoscope generator (original content, deterministic-ish)
+     *************************************************************/
+    const Horoscope = (() => {
+      const love = [
+        "Vztahy se zklidní, když přestaneš číst mezi řádky. Zkus jednu otevřenou otázku místo domněnek.",
+        "Přitahuješ pozornost, ale budeš muset vybrat, komu dáš svůj čas. Kvalita > kvantita.",
+        "Někdo se ozve nečekaně. Dej tomu šanci, ale drž si své hranice – jemně a jasně.",
+        "Malé gesto udělá velký rozdíl. Nemusí to být velká řeč, stačí konzistence.",
+        "Pokud je ve vztahu napětí, teď je ideální čas na restart pravidel – co je OK a co už ne."
+      ];
+
+      const work = [
+        "V práci ti vyjde, co má strukturu. Zaveď si jednoduchý systém a drž ho celý měsíc.",
+        "Přijde nová příležitost – spíš nenápadná než hlasitá. Když ji chytíš včas, bude z toho náskok.",
+        "Pozor na roztříštěnost. Jeden velký úkol týdně je lepší než pět rozpracovaných.",
+        "Finance: drž se pravidla 'nejdřív rezerva, pak radost'. Malá disciplína = velký klid.",
+        "Komunikace je klíč: napiš si dopředu, co chceš říct, a ušetříš si dva follow-upy."
+      ];
+
+      const health = [
+        "Energie kolísá – pomůže rytmus. Spánek + pravidelné jídlo udělají víc než heroický výkon.",
+        "Tělo si řekne o pauzu. Zařaď jednu 'offline' hodinu denně a uvidíš rozdíl v hlavě.",
+        "Dobrá doba na drobný návyk: 10 minut pohybu denně. Ne moc, ale každý den.",
+        "Zpomal, jinak tě zpomalí okolnosti. Méně stimulů, více soustředění.",
+        "Zdraví: vrať se k základům. Voda, vzduch, krok – jednoduché věci budou fungovat nejlíp."
+      ];
+
+      const tips = [
+        "Tip: Každé pondělí si napiš 3 priority týdne. Cokoliv mimo ně je bonus, ne povinnost.",
+        "Tip: Řekni 'ne' jedné věci, která ti bere energii – získáš prostor pro to důležité.",
+        "Tip: Udělej si 'den bez dohánění'. Někdy je nejlepší zrychlení to, že přestaneš utíkat.",
+        "Tip: Minimalismus v kalendáři. Neplánuj 100 % času – nech rezervu na realitu.",
+        "Tip: Jeden rozhovor, který odkládáš, udělá po vyřešení největší úlevu."
+      ];
+
+      function hash(str){
+        let h = 2166136261;
+        for(let i=0;i<str.length;i++){
+          h ^= str.charCodeAt(i);
+          h = Math.imul(h, 16777619);
+        }
+        return (h >>> 0);
+      }
+
+      function pick(arr, seed){
+        return arr[seed % arr.length];
+      }
+
+      function generate({ signKey, dateSeed, monthSeed }){
+        const seedBase = `${signKey}|${dateSeed}|${monthSeed}`;
+        const s1 = hash(seedBase + "|love");
+        const s2 = hash(seedBase + "|work");
+        const s3 = hash(seedBase + "|health");
+        const s4 = hash(seedBase + "|tip");
+
+        return {
+          love: pick(love, s1),
+          work: pick(work, s2),
+          health: pick(health, s3),
+          tip: pick(tips, s4)
+        };
+      }
+
+      return { generate };
+    })();
+
+    /*************************************************************
+     * Utils: date parsing + next month label
+     *************************************************************/
+    function parseCZDate(input){
+      const m = input.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+      if(!m) return null;
+
+      const d = Number(m[1]);
+      const mo = Number(m[2]);
+      const y = Number(m[3]);
+
+      if(mo < 1 || mo > 12) return null;
+      if(d < 1 || d > 31) return null;
+
+      const dt = new Date(y, mo - 1, d);
+      if(dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+
+      return { d, mo, y };
+    }
+
+    function nextMonthLabel(){
+      const months = [
+        "leden","únor","březen","duben","květen","červen",
+        "červenec","srpen","září","říjen","listopad","prosinec"
+      ];
+      const now = new Date();
+      const nm = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return `${months[nm.getMonth()]} ${nm.getFullYear()}`;
+    }
+
+    /*************************************************************
+     * UI bindings
+     *************************************************************/
+    const els = {
+      birthdate: document.getElementById("birthdate"),
+      goBtn: document.getElementById("goBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      fillTodayBtn: document.getElementById("fillTodayBtn"),
+      errorBox: document.getElementById("errorBox"),
+
+      resultBox: document.getElementById("resultBox"),
+      signImg: document.getElementById("signImg"),
+      signTitle: document.getElementById("signTitle"),
+      signRange: document.getElementById("signRange"),
+      monthBadge: document.getElementById("monthBadge"),
+
+      loveText: document.getElementById("loveText"),
+      workText: document.getElementById("workText"),
+      healthText: document.getElementById("healthText"),
+      tipText: document.getElementById("tipText")
+    };
+
+    function showError(msg){
+      els.errorBox.textContent = msg;
+      els.errorBox.style.display = "block";
+      els.resultBox.style.display = "none";
+    }
+
+    function clearError(){
+      els.errorBox.textContent = "";
+      els.errorBox.style.display = "none";
+    }
+
+    function renderResult({ sign, parsed, texts }){
+      els.signTitle.textContent = `Tvoje znamení je ${sign.name}`;
+      els.signRange.textContent = `Rozmezí: ${Zodiac.formatRange(sign)} • Zadáno: ${String(parsed.d).padStart(2,"0")}.${String(parsed.mo).padStart(2,"0")}.${parsed.y}`;
+      els.signImg.src = Zodiac.imageUrl(sign.file);
+      els.signImg.alt = `${sign.name} (symbol)`;
+
+      const label = nextMonthLabel();
+      els.monthBadge.querySelector("span").textContent = `Horoskop pro ${label}`;
+
+      els.loveText.textContent = texts.love;
+      els.workText.textContent = texts.work;
+      els.healthText.textContent = texts.health;
+      els.tipText.textContent = texts.tip;
+
+      els.resultBox.style.display = "block";
+      lucide.createIcons();
+    }
+
+    function handleGenerate(){
+      clearError();
+
+      const raw = (els.birthdate.value || "").trim();
+      if(!raw){
+        showError("Zadej datum narození ve formátu DD.MM.RRRR.");
+        return;
+      }
+
+      const parsed = parseCZDate(raw);
+      if(!parsed){
+        showError("Neplatný formát nebo datum. Použij DD.MM.RRRR (např. 07.11.1992).");
+        return;
+      }
+
+      const sign = Zodiac.getSign(parsed.d, parsed.mo);
+      if(!sign){
+        showError("Nepodařilo se určit znamení. Zkus to prosím znovu.");
+        return;
+      }
+
+      Store.set(raw);
+
+      const now = new Date();
+      const nm = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const monthSeed = `${nm.getFullYear()}-${String(nm.getMonth()+1).padStart(2,"0")}`;
+      const dateSeed = `${parsed.y}-${String(parsed.mo).padStart(2,"0")}-${String(parsed.d).padStart(2,"0")}`;
+
+      const texts = Horoscope.generate({
+        signKey: sign.key,
+        dateSeed,
+        monthSeed
+      });
+
+      renderResult({ sign, parsed, texts });
+    }
+
+    (function init(){
+      lucide.createIcons();
+
+      const last = Store.get();
+      if(last){
+        els.birthdate.value = last;
+        handleGenerate();
+      }
+
+      els.goBtn.addEventListener("click", handleGenerate);
+      els.birthdate.addEventListener("keydown", (e) => {
+        if(e.key === "Enter") handleGenerate();
+      });
+
+      els.clearBtn.addEventListener("click", () => {
+        Store.clear();
+        els.birthdate.value = "";
+        els.resultBox.style.display = "none";
+        clearError();
+      });
+
+      els.fillTodayBtn.addEventListener("click", () => {
+        els.birthdate.value = "01.01.2000";
+        handleGenerate();
+      });
+    })();
+  </script>
+</body>
+</html>
